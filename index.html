@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f4ef">
+<title>B站额度</title>
+<style>
+:root{color-scheme:light;--bg:#f6f4ef;--card:#fff;--ink:#1d1d1f;--sub:#6e6e73;--line:#e6e2d9;--pink:#fb7299;--green:#2f9e6b;--red:#d9463b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 24px)}
+main{max-width:520px;margin:0 auto}
+h1{font-size:20px;margin:18px 2px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+.card h2{font-size:16px;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card h2 small{font-weight:400;color:var(--sub);font-size:13px;text-align:right}
+.hero{text-align:center}
+.big{font-size:52px;font-weight:700;letter-spacing:-1px;line-height:1.1}
+.big.neg{color:var(--red)}
+.sub{color:var(--sub);font-size:13px}
+.stats{display:flex;justify-content:space-around;margin-top:12px}
+.stats div{text-align:center}.stats b{display:block;font-size:18px}
+button{font:inherit;border:0;border-radius:12px;padding:12px 14px;background:var(--pink);color:#fff;font-weight:600;cursor:pointer}
+button:disabled{opacity:.4}
+button.ghost{background:#f1eee8;color:var(--ink)}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.timer{font-size:44px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;margin:6px 0}
+.note{background:#fff6e5;border-radius:10px;padding:8px 10px;font-size:13px;color:#7a5a12;margin:8px 0}
+.note.err{background:#fdecea;color:#8a2a22}
+.note.ok{background:#e8f6ee;color:#1e6b47}
+ul.tasks{list-style:none;margin:0;padding:0}
+ul.tasks li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+ul.tasks li:last-child{border-bottom:0}
+.chk{width:28px;height:28px;border-radius:50%;border:2px solid #d4cfc4;flex:none;display:grid;place-items:center;color:#fff;font-size:15px;padding:0;background:#fff}
+li.done .chk{background:var(--green);border-color:var(--green)}
+li .txt{flex:1;word-break:break-all}
+li.done .txt{color:var(--sub);text-decoration:line-through}
+.tag{font-size:11px;color:var(--sub);border:1px solid var(--line);border-radius:6px;padding:0 5px;margin-left:6px;display:inline-block;text-decoration:none}
+.x{background:none;color:var(--sub);padding:4px 6px;font-weight:400;font-size:14px}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;width:100%;color:var(--ink)}
+.stepper{display:flex;align-items:center;justify-content:center;gap:16px;margin:8px 0 12px}
+.stepper span{font-size:28px;font-weight:700;min-width:90px;text-align:center}
+.stepper button{width:52px;flex:none;padding:10px 0}
+.log{font-size:13px;max-height:260px;overflow:auto}
+.log div{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line)}
+.plus{color:var(--green)}.minus{color:var(--red)}
+details summary{font-weight:600;cursor:pointer}
+.set{display:grid;grid-template-columns:1fr 110px;gap:8px 10px;align-items:center;margin-top:12px;font-size:14px}
+.set label{color:var(--ink)}
+.chips{display:flex;gap:6px;justify-content:center;margin-bottom:10px}
+.chips button{flex:none;padding:6px 12px;font-size:14px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<h1>B站额度</h1>
+
+<section class="card hero">
+  <div class="sub">可用额度</div>
+  <div class="big" id="bal">0</div>
+  <div class="sub">分钟</div>
+  <div class="stats">
+    <div><b id="stFocus">0</b><span class="sub">今日专注(分)</span></div>
+    <div><b id="stEarn">0</b><span class="sub">今日获得(分)</span></div>
+    <div><b id="stSpend">0</b><span class="sub">今日已看(分)</span></div>
+  </div>
+</section>
+
+<section class="card" id="sessCard">
+  <h2>正在看B站 <small id="sessUntil"></small></h2>
+  <div class="timer" id="sessLeft">00:00</div>
+  <div class="row">
+    <button id="btnRetry">再次尝试打开B站</button>
+    <button class="ghost" id="btnUndo">退回</button>
+  </div>
+  <div class="sub" style="margin-top:8px">到点闹钟会响，点“停止”后会被弹回这里。</div>
+</section>
+
+<section class="card" id="spendCard">
+  <h2>去看B站 <small id="spendHint"></small></h2>
+  <div class="stepper">
+    <button class="ghost" id="minus">−</button>
+    <span id="amt">0 分</span>
+    <button class="ghost" id="plus">＋</button>
+  </div>
+  <div class="chips">
+    <button class="ghost" data-amt="5">5 分</button>
+    <button class="ghost" data-amt="10">10 分</button>
+    <button class="ghost" data-amt="all">全部</button>
+  </div>
+  <div class="note hide" id="spendNote"></div>
+  <button id="btnGo" style="width:100%">扣额度并打开B站</button>
+</section>
+<section class="card">
+  <h2>今日待办 <small id="taskHint"></small></h2>
+  <ul class="tasks" id="taskList"></ul>
+  <div class="sub hide" id="taskEmpty" style="padding:6px 0">还没有任务，先在下面加一个。</div>
+  <div class="row" style="margin-top:10px">
+    <input id="taskText" placeholder="比如：背 50 个单词" maxlength="60" style="flex:3">
+    <input id="taskMins" type="number" min="1" max="120" inputmode="numeric" style="flex:1" title="完成奖励（分钟）">
+  </div>
+  <div class="row" style="margin-top:8px">
+    <select id="taskRepeat" style="flex:2">
+      <option value="0">只今天（没做完会顺延）</option>
+      <option value="1">每天重复</option>
+    </select>
+    <button id="btnAddTask" style="flex:1">添加</button>
+  </div>
+  <div class="note hide" id="taskNote"></div>
+</section>
+
+<section class="card">
+  <h2>专注 <small id="focusRule"></small></h2>
+  <div id="focusIdle">
+    <div class="chips">
+      <button class="ghost" data-target="30">30 分钟</button>
+      <button class="ghost" data-target="60">60 分钟</button>
+      <button class="ghost" data-target="0">不设目标</button>
+    </div>
+    <button id="btnFocus" style="width:100%">开始专注</button>
+  </div>
+  <div id="focusRun" class="hide">
+    <div class="sub" style="text-align:center" id="focusTargetTxt"></div>
+    <div class="timer" id="focusTime">00:00</div>
+    <div class="sub" style="text-align:center" id="focusEarn"></div>
+    <div class="note">保持本页在前台、屏幕常亮。离开超过 <span id="tolTxt">60</span> 秒，这一轮作废。</div>
+    <div class="row">
+      <button id="btnClaim">结束并领取</button>
+      <button class="ghost" id="btnAbandon">放弃</button>
+    </div>
+  </div>
+  <div class="note hide" id="focusNote"></div>
+</section>
+
+<section class="card">
+  <h2>记录</h2>
+  <div class="log" id="log"></div>
+</section>
+<section class="card">
+<details>
+  <summary>设置</summary>
+  <div class="set">
+    <label for="sRatio">每专注几分钟换 1 分钟B站</label><input id="sRatio" type="number" min="1" inputmode="numeric">
+    <label for="sMinFocus">最短专注（分钟）</label><input id="sMinFocus" type="number" min="1" inputmode="numeric">
+    <label for="sTol">离开容忍（秒）</label><input id="sTol" type="number" min="5" inputmode="numeric">
+    <label for="sTaskMins">待办默认奖励（分钟）</label><input id="sTaskMins" type="number" min="1" inputmode="numeric">
+    <label for="sTaskCap">待办每日奖励上限（分钟，0=不限）</label><input id="sTaskCap" type="number" min="0" inputmode="numeric">
+    <label for="sMaxSess">单次最长看多久（分钟，0=不限）</label><input id="sMaxSess" type="number" min="0" inputmode="numeric">
+    <label for="sNight">夜间不开放B站</label><select id="sNight"><option value="0">关闭</option><option value="1">开启</option></select>
+    <label for="sNightFrom">夜间开始</label><input id="sNightFrom" type="time">
+    <label for="sNightTo">夜间结束</label><input id="sNightTo" type="time">
+    <label for="sShortcut">放行快捷指令名称</label><input id="sShortcut" type="text">
+  </div>
+  <button id="btnSave" style="width:100%;margin-top:12px">保存设置</button>
+  <div class="row" style="margin-top:8px">
+    <button class="ghost" id="btnExport">导出备份</button>
+    <button class="ghost" id="btnImport">导入备份</button>
+  </div>
+  <textarea id="backup" rows="4" class="hide" style="margin-top:8px" placeholder="把备份内容粘贴到这里，再点一次“导入备份”"></textarea>
+  <div class="row" style="margin-top:8px">
+    <input id="adjMins" type="number" inputmode="numeric" placeholder="校正额度，如 20 或 -5">
+    <button class="ghost" id="btnAdj">校正余额</button>
+  </div>
+  <div class="note hide" id="setNote"></div>
+</details>
+</section>
+</main>
+<script>
+'use strict';
+const KEY = 'biliGate.v2';
+const DEFAULTS = {
+  ratio: 6,          // 每专注 6 分钟换 1 分钟：30→5，60→10
+  minFocus: 10,
+  tol: 60,
+  taskMins: 10,      // 每个待办默认奖励
+  taskCap: 0,        // 待办每日奖励上限，0 = 不限
+  maxSess: 0,
+  night: 0, nightFrom: '23:00', nightTo: '06:00',
+  shortcut: 'B站放行'
+};
+const UNDO_WINDOW = 90 * 1000;
+const $ = id => document.getElementById(id);
+
+function load() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  s = s || {};
+  s.settings = Object.assign({}, DEFAULTS, s.settings || {});
+  s.balance = Number(s.balance) || 0;
+  s.log = Array.isArray(s.log) ? s.log : [];
+  s.tasks = Array.isArray(s.tasks) ? s.tasks : [];
+  s.focus = s.focus || null;
+  s.session = s.session || null;
+  return s;
+}
+let S = load();
+function save() { localStorage.setItem(KEY, JSON.stringify(S)); }
+
+const pad = n => String(n).padStart(2, '0');
+function dayKey(d = new Date()) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function stamp(d) { return `${dayKey(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+function hm(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function mmss(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function addLog(type, delta, note, mins) {
+  S.log.unshift({ t: Date.now(), type, delta, note, mins: mins || 0 });
+  if (S.log.length > 300) S.log.length = 300;
+}
+function todayLogs() { const k = dayKey(); return S.log.filter(l => dayKey(new Date(l.t)) === k); }
+function note(el, text, kind) {
+  el.textContent = text;
+  el.className = 'note' + (kind ? ' ' + kind : '');
+  if (!text) el.classList.add('hide');
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+/* ---------- 夜间 ---------- */
+function toMin(t) { const [h, m] = String(t).split(':').map(Number); return (h || 0) * 60 + (m || 0); }
+function inNight(d = new Date()) {
+  const st = S.settings;
+  if (!Number(st.night)) return false;
+  const now = d.getHours() * 60 + d.getMinutes(), a = toMin(st.nightFrom), b = toMin(st.nightTo);
+  if (a === b) return false;
+  return a < b ? (now >= a && now < b) : (now >= a || now < b);
+}
+/* ---------- 待办 ---------- */
+// 任务：{id, text, mins, repeat, created, doneDate, reward}
+// reward 记录这次打勾实际给了多少分钟，取消打勾时按它扣回。
+function taskDoneToday(t) { return t.doneDate === dayKey(); }
+function visibleTasks() {
+  const k = dayKey();
+  // 一次性任务：没做完的一直显示（顺延）；做完的只在完成当天显示
+  return S.tasks.filter(t => t.repeat || !t.doneDate || t.doneDate === k);
+}
+function taskEarnedToday() {
+  return todayLogs().filter(l => l.type === 'task').reduce((a, l) => a + l.delta, 0);
+}
+function toggleTask(id) {
+  const t = S.tasks.find(x => x.id === id);
+  if (!t) return;
+  const nt = $('taskNote');
+  if (taskDoneToday(t)) {
+    const back = t.reward || 0;
+    S.balance -= back;
+    if (back) addLog('task', -back, `取消完成：${t.text}`);
+    t.doneDate = null;
+    t.reward = 0;
+    note(nt, back ? `已取消，扣回 ${back} 分钟。` : '已取消。');
+  } else {
+    let give = Math.max(0, Math.floor(Number(t.mins) || 0));
+    const cap = Math.floor(Number(S.settings.taskCap) || 0);
+    if (cap > 0) give = Math.max(0, Math.min(give, cap - taskEarnedToday()));
+    t.doneDate = dayKey();
+    t.reward = give;
+    if (give) {
+      S.balance += give;
+      addLog('task', give, `完成待办：${t.text}`);
+      note(nt, `完成！+${give} 分钟。`, 'ok');
+    } else {
+      note(nt, '已完成。今天待办奖励已到上限，这个不再加额度。');
+    }
+  }
+  save(); render();
+}
+function deleteTask(id) {
+  const t = S.tasks.find(x => x.id === id);
+  if (!t) return;
+  if (!confirm(`删除“${t.text}”？已经得到的额度不会扣回。`)) return;
+  S.tasks = S.tasks.filter(x => x.id !== id);
+  save(); render();
+}
+function addTask() {
+  const text = $('taskText').value.trim();
+  const mins = Math.floor(Number($('taskMins').value) || S.settings.taskMins);
+  if (!text) { note($('taskNote'), '先写任务内容。', 'err'); return; }
+  if (mins < 1 || mins > 120) { note($('taskNote'), '奖励请填 1 到 120 分钟。', 'err'); return; }
+  S.tasks.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text, mins, repeat: $('taskRepeat').value === '1', created: dayKey(), doneDate: null, reward: 0 });
+  $('taskText').value = '';
+  note($('taskNote'), '');
+  save(); render();
+}
+function renderTasks() {
+  const list = visibleTasks();
+  $('taskEmpty').classList.toggle('hide', list.length > 0);
+  // 未完成在前
+  list.sort((a, b) => taskDoneToday(a) - taskDoneToday(b));
+  $('taskList').innerHTML = list.map(t => {
+    const done = taskDoneToday(t);
+    const late = !t.repeat && !done && t.created < dayKey();
+    return `<li class="${done ? 'done' : ''}">
+      <button class="chk" data-toggle="${t.id}" aria-label="${done ? '取消完成' : '完成'}">${done ? '✓' : ''}</button>
+      <span class="txt">${esc(t.text)}<span class="tag">+${done ? t.reward : t.mins} 分</span>${t.repeat ? '<span class="tag">每天</span>' : ''}${late ? '<span class="tag">顺延</span>' : ''}</span>
+      <button class="x" data-del="${t.id}" aria-label="删除">✕</button></li>`;
+  }).join('');
+  const done = list.filter(taskDoneToday).length;
+  const cap = Math.floor(Number(S.settings.taskCap) || 0);
+  $('taskHint').textContent = `${done}/${list.length} 完成` + (cap ? ` · 今日 ${taskEarnedToday()}/${cap} 分` : '');
+}
+/* ---------- 专注 ---------- */
+// focus: {start, target(分钟,0=无), lastBeat, hiddenAt, hit}
+let wakeLock = null;
+let focusTarget = 30;
+async function lockScreen() {
+  try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) {}
+}
+function unlockScreen() { try { wakeLock && wakeLock.release(); } catch (e) {} wakeLock = null; }
+function focusMinutes(f = S.focus) { return f ? Math.floor((Date.now() - f.start) / 60000) : 0; }
+function earnFor(mins) { return Math.floor(mins / Math.max(1, Number(S.settings.ratio) || 6)); }
+function startFocus() {
+  S.focus = { start: Date.now(), target: focusTarget, lastBeat: Date.now(), hiddenAt: null, hit: false };
+  save(); note($('focusNote'), ''); lockScreen(); render();
+}
+function voidFocus(reason) {
+  if (!S.focus) return;
+  addLog('void', 0, `专注作废（${reason}），已专注 ${focusMinutes()} 分`);
+  S.focus = null; save(); unlockScreen();
+  note($('focusNote'), `这一轮作废：${reason}。`, 'err');
+  render();
+}
+function claimFocus() {
+  const f = S.focus; if (!f) return;
+  const mins = focusMinutes(f), min = Number(S.settings.minFocus) || 10;
+  if (mins < min) {
+    if (!confirm(`才专注 ${mins} 分钟，不到最短 ${min} 分钟，结束将不给额度。确定结束？`)) return;
+    addLog('focus', 0, `专注 ${mins} 分（未达最短时长）`, mins);
+    S.focus = null; save(); unlockScreen(); render(); return;
+  }
+  const g = earnFor(mins);
+  S.balance += g;
+  addLog('focus', g, `专注 ${mins} 分`, mins);
+  S.focus = null; save(); unlockScreen();
+  note($('focusNote'), `领取成功：专注 ${mins} 分钟，+${g} 分钟。`, 'ok');
+  render();
+}
+function beep() {
+  try {
+    const C = window.AudioContext || window.webkitAudioContext, c = new C();
+    [0, .35, .7].forEach(t => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 880; o.connect(g); g.connect(c.destination); g.gain.setValueAtTime(.2, c.currentTime + t); o.start(c.currentTime + t); o.stop(c.currentTime + t + .2); });
+  } catch (e) {}
+}
+// 页面切走：记时间；回来：超过容忍就作废
+document.addEventListener('visibilitychange', () => {
+  if (!S.focus) return;
+  if (document.hidden) { S.focus.hiddenAt = Date.now(); save(); }
+  else {
+    const away = S.focus.hiddenAt ? (Date.now() - S.focus.hiddenAt) / 1000 : 0;
+    S.focus.hiddenAt = null; save();
+    if (away > Number(S.settings.tol)) voidFocus(`离开了 ${Math.round(away)} 秒`);
+    else lockScreen();
+  }
+});
+// 页面被系统杀掉后重开：用最后一次心跳判断
+function checkStaleFocus() {
+  if (!S.focus) return;
+  const ref = S.focus.hiddenAt || S.focus.lastBeat;
+  const away = (Date.now() - ref) / 1000;
+  if (away > Number(S.settings.tol)) voidFocus(`页面关闭或离开了 ${Math.round(away)} 秒`);
+}
+
+/* ---------- 看B站 ---------- */
+// session: {start, until, amt}
+let spendAmt = 5;
+function activeSession() { return S.session && S.session.until > Date.now() ? S.session : null; }
+function maxSpend() {
+  const m = Math.floor(Number(S.settings.maxSess) || 0);
+  const b = Math.max(0, Math.floor(S.balance));
+  return m > 0 ? Math.min(m, b) : b;
+}
+function runShortcut(until) {
+  const name = S.settings.shortcut || DEFAULTS.shortcut;
+  location.href = `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=text&text=${encodeURIComponent(stamp(new Date(until)))}`;
+}
+function goBili() {
+  const amt = Math.floor(spendAmt);
+  if (inNight()) return note($('spendNote'), '现在是夜间不开放时段，去睡觉吧。', 'err');
+  if (amt < 1 || amt > maxSpend()) return note($('spendNote'), '额度不够。', 'err');
+  const start = Date.now(), until = Math.ceil((start + amt * 60000) / 60000) * 60000; // 闹钟只精确到分钟，结束时间向上取整到整分钟
+  S.balance -= amt;
+  S.session = { start, until, amt };
+  addLog('spend', -amt, `看B站 ${amt} 分（到 ${hm(new Date(until))}）`);
+  save(); render();
+  runShortcut(until);
+}
+function undoSession() {
+  const s = activeSession(); if (!s) return;
+  if (Date.now() - s.start > UNDO_WINDOW) return;
+  const back = Math.ceil((s.until - Date.now()) / 60000);
+  const refund = Math.min(s.amt, back);
+  S.balance += refund;
+  addLog('undo', refund, '退回本次B站时段');
+  S.session = null; save(); render();
+}
+/* ---------- 渲染 ---------- */
+const TYPE_NAME = { focus: '专注', task: '待办', spend: '看B站', undo: '退回', adjust: '校正', void: '作废' };
+function render() {
+  const bal = Math.floor(S.balance);
+  $('bal').textContent = bal; $('bal').classList.toggle('neg', bal < 0);
+  const tl = todayLogs();
+  $('stFocus').textContent = tl.filter(l => l.type === 'focus').reduce((a, l) => a + (l.mins || 0), 0);
+  $('stEarn').textContent = tl.filter(l => l.type === 'focus' || l.type === 'task').reduce((a, l) => a + l.delta, 0);
+  $('stSpend').textContent = tl.filter(l => l.type === 'spend').reduce((a, l) => a - l.delta, 0) - tl.filter(l => l.type === 'undo').reduce((a, l) => a + l.delta, 0);
+
+  const s = activeSession();
+  $('sessCard').classList.toggle('hide', !s);
+  $('spendCard').classList.toggle('hide', !!s);
+  if (s) {
+    $('sessUntil').textContent = `到 ${hm(new Date(s.until))}`;
+    $('sessLeft').textContent = mmss((s.until - Date.now()) / 1000);
+    $('btnUndo').classList.toggle('hide', Date.now() - s.start > UNDO_WINDOW);
+  } else {
+    const mx = maxSpend();
+    if (spendAmt > mx) spendAmt = mx;
+    if (spendAmt < 1 && mx >= 1) spendAmt = Math.min(5, mx);
+    $('amt').textContent = `${Math.max(0, spendAmt)} 分`;
+    const night = inNight();
+    $('btnGo').disabled = night || mx < 1;
+    $('spendHint').textContent = night ? '夜间不开放' : (Number(S.settings.maxSess) ? `单次最多 ${S.settings.maxSess} 分` : '');
+  }
+
+  const st = S.settings;
+  $('focusRule').textContent = `每 ${st.ratio} 分钟 +1 分 · 最短 ${st.minFocus} 分`;
+  $('tolTxt').textContent = st.tol;
+  $('taskMins').placeholder = `+${st.taskMins}分`;
+  const f = S.focus;
+  $('focusIdle').classList.toggle('hide', !!f);
+  $('focusRun').classList.toggle('hide', !f);
+  document.querySelectorAll('[data-target]').forEach(b => b.style.background = Number(b.dataset.target) === focusTarget ? '#ffe0ea' : '');
+  if (f) {
+    const sec = (Date.now() - f.start) / 1000, mins = Math.floor(sec / 60);
+    $('focusTime').textContent = mmss(f.target ? Math.max(0, f.target * 60 - sec) : sec);
+    $('focusTargetTxt').textContent = f.target ? (sec >= f.target * 60 ? `目标 ${f.target} 分钟已达成，可以继续` : `目标 ${f.target} 分钟，剩余`) : '已专注';
+    if (f.target && sec >= f.target * 60) $('focusTime').textContent = mmss(sec);
+    $('focusEarn').textContent = mins < st.minFocus ? `再坚持 ${st.minFocus - mins} 分钟才能领取` : `现在领取可得 ${earnFor(mins)} 分钟`;
+  }
+  renderTasks();
+  $('log').innerHTML = S.log.slice(0, 80).map(l => {
+    const d = new Date(l.t);
+    const cls = l.delta > 0 ? 'plus' : l.delta < 0 ? 'minus' : '';
+    return `<div><span>${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm(d)} ${esc(l.note || TYPE_NAME[l.type] || '')}</span><b class="${cls}">${l.delta > 0 ? '+' : ''}${l.delta || ''}</b></div>`;
+  }).join('') || '<div class="sub">暂无记录</div>';
+}
+
+/* ---------- 设置 ---------- */
+const SET_FIELDS = { ratio: 'sRatio', minFocus: 'sMinFocus', tol: 'sTol', taskMins: 'sTaskMins', taskCap: 'sTaskCap', maxSess: 'sMaxSess', night: 'sNight', nightFrom: 'sNightFrom', nightTo: 'sNightTo', shortcut: 'sShortcut' };
+function fillSettings() { for (const k in SET_FIELDS) $(SET_FIELDS[k]).value = S.settings[k]; }
+function saveSettings() {
+  const n = {};
+  for (const k in SET_FIELDS) {
+    const v = $(SET_FIELDS[k]).value;
+    n[k] = typeof DEFAULTS[k] === 'number' ? Math.max(0, Math.floor(Number(v) || 0)) : (v || DEFAULTS[k]);
+  }
+  if (n.ratio < 1) n.ratio = 1;
+  if (n.minFocus < 1) n.minFocus = 1;
+  if (n.tol < 5) n.tol = 5;
+  if (n.taskMins < 1) n.taskMins = 1;
+  S.settings = n; save(); fillSettings(); render();
+  note($('setNote'), '已保存。', 'ok');
+}
+function exportBackup() {
+  const ta = $('backup'); ta.classList.remove('hide');
+  ta.value = JSON.stringify({ balance: S.balance, settings: S.settings, tasks: S.tasks, log: S.log.slice(0, 100) });
+  ta.select();
+  try { navigator.clipboard.writeText(ta.value); note($('setNote'), '已复制，存到备忘录里。', 'ok'); }
+  catch (e) { note($('setNote'), '请手动复制上面的内容。'); }
+}
+function importBackup() {
+  const ta = $('backup');
+  if (ta.classList.contains('hide') || !ta.value.trim()) { ta.classList.remove('hide'); ta.value = ''; ta.focus(); note($('setNote'), '把备份粘贴进去，再点一次“导入备份”。'); return; }
+  try {
+    const d = JSON.parse(ta.value);
+    if (typeof d.balance !== 'number') throw 0;
+    if (!confirm(`导入后余额将变成 ${Math.floor(d.balance)} 分钟，当前数据会被覆盖。继续？`)) return;
+    S.balance = d.balance;
+    S.settings = Object.assign({}, DEFAULTS, d.settings || {});
+    S.tasks = Array.isArray(d.tasks) ? d.tasks : S.tasks;
+    S.log = Array.isArray(d.log) ? d.log : S.log;
+    addLog('adjust', 0, '导入备份');
+    save(); fillSettings(); render();
+    note($('setNote'), '导入成功。', 'ok');
+  } catch (e) { note($('setNote'), '备份内容不对，没有导入。', 'err'); }
+}
+function adjust() {
+  const v = Math.trunc(Number($('adjMins').value));
+  if (!v) return;
+  if (!confirm(`余额 ${v > 0 ? '+' : ''}${v} 分钟？这会记在记录里。`)) return;
+  S.balance += v; addLog('adjust', v, '手动校正'); $('adjMins').value = '';
+  save(); render();
+}
+
+/* ---------- 事件 ---------- */
+$('btnFocus').onclick = startFocus;
+$('btnClaim').onclick = claimFocus;
+$('btnAbandon').onclick = () => { if (confirm('放弃这一轮？不给额度。')) voidFocus('主动放弃'); };
+document.querySelectorAll('[data-target]').forEach(b => b.onclick = () => { focusTarget = Number(b.dataset.target); render(); });
+$('minus').onclick = () => { spendAmt = Math.max(1, spendAmt - 1); render(); };
+$('plus').onclick = () => { spendAmt = Math.min(maxSpend(), spendAmt + 1); render(); };
+document.querySelectorAll('[data-amt]').forEach(b => b.onclick = () => { spendAmt = b.dataset.amt === 'all' ? maxSpend() : Math.min(maxSpend(), Number(b.dataset.amt)); note($('spendNote'), ''); render(); });
+$('btnGo').onclick = goBili;
+$('btnRetry').onclick = () => { const s = activeSession(); if (s) runShortcut(s.until); };
+$('btnUndo').onclick = () => { if (confirm('退回本次时段，剩余分钟还给余额？')) undoSession(); };
+$('taskList').onclick = e => {
+  const t = e.target.closest('[data-toggle]'), d = e.target.closest('[data-del]');
+  if (t) toggleTask(t.dataset.toggle);
+  if (d) deleteTask(d.dataset.del);
+};
+$('btnAddTask').onclick = addTask;
+$('taskText').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+$('btnSave').onclick = saveSettings;
+$('btnExport').onclick = exportBackup;
+$('btnImport').onclick = importBackup;
+$('btnAdj').onclick = adjust;
+window.addEventListener('storage', e => { if (e.key === KEY) { S = load(); render(); } });
+
+/* ---------- 心跳 ---------- */
+let lastDay = dayKey();
+setInterval(() => {
+  if (S.focus && !document.hidden) {
+    S.focus.lastBeat = Date.now();
+    const f = S.focus;
+    if (f.target && !f.hit && Date.now() - f.start >= f.target * 60000) { f.hit = true; beep(); }
+    save();
+  }
+  if (S.session && S.session.until <= Date.now()) { S.session = null; save(); }
+  if (dayKey() !== lastDay) { lastDay = dayKey(); }
+  render();
+}, 1000);
+
+checkStaleFocus();
+if (S.focus) lockScreen();
+fillSettings();
+render();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
